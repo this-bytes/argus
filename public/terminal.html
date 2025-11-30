@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARGUS Terminal - InfoSec Browser Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #00ff00;
+      --primary-dim: #00aa00;
+      --bg: #0a0a0a;
+      --bg-lighter: #111111;
+      --error: #ff4444;
+      --warning: #ffaa00;
+      --info: #00aaff;
+      --success: #00ff00;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Fira Code', 'VT323', monospace;
+      background: var(--bg);
+      color: var(--primary);
+      line-height: 1.4;
+    }
+    /* CRT Effects */
+    .crt-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .crt-container::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px);
+      pointer-events: none;
+      z-index: 1000;
+    }
+    .crt-container::after {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.3) 90%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 999;
+    }
+    .terminal {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 10px;
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-lighter);
+      border: 1px solid var(--primary-dim);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+    .terminal-btn { width: 12px; height: 12px; border-radius: 50%; }
+    .terminal-btn.red { background: #ff5f56; }
+    .terminal-btn.yellow { background: #ffbd2e; }
+    .terminal-btn.green { background: #27c93f; }
+    .terminal-title { margin-left: 10px; color: var(--primary-dim); font-size: 12px; }
+    .terminal-output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      background: var(--bg);
+      border: 1px solid var(--primary-dim);
+      font-size: 14px;
+    }
+    .terminal-output::-webkit-scrollbar { width: 8px; }
+    .terminal-output::-webkit-scrollbar-track { background: var(--bg); }
+    .terminal-output::-webkit-scrollbar-thumb { background: var(--primary-dim); border-radius: 4px; }
+    .line { white-space: pre-wrap; word-break: break-word; margin-bottom: 2px; }
+    .line.error { color: var(--error); }
+    .line.success { color: var(--success); }
+    .line.info { color: var(--info); }
+    .line.warning { color: var(--warning); }
+    .line.command { color: #ffff00; }
+    .line.system { color: var(--primary-dim); }
+    .text-glow { text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary); }
+    .terminal-input-line {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      background: var(--bg-lighter);
+      border: 1px solid var(--primary-dim);
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+    }
+    .prompt { color: var(--primary); margin-right: 8px; font-weight: 600; }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--primary);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      caret-color: var(--primary);
+    }
+    .cursor { color: var(--primary); animation: blink 1s infinite; }
+    @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+    .ascii-art { color: var(--primary); line-height: 1.1; font-size: 10px; }
+    @media (max-width: 600px) {
+      .terminal-output { font-size: 12px; }
+      .ascii-art { font-size: 7px; }
+    }
+    /* Theme variations */
+    body.theme-amber { --primary: #ffaa00; --primary-dim: #aa7700; }
+    body.theme-purple { --primary: #aa00ff; --primary-dim: #7700aa; }
+    body.theme-blue { --primary: #00aaff; --primary-dim: #0077aa; }
+    body.theme-red { --primary: #ff4444; --primary-dim: #aa2222; }
+  </style>
+</head>
+<body>
+  <div class="crt-container">
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="terminal-btn red"></div>
+        <div class="terminal-btn yellow"></div>
+        <div class="terminal-btn green"></div>
+        <span class="terminal-title">ARGUS TERMINAL v2.0.0</span>
+      </div>
+      <div class="terminal-output" id="output"></div>
+      <div class="terminal-input-line">
+        <span class="prompt" id="prompt">user@argus:~$</span>
+        <input type="text" class="terminal-input" id="input" autofocus autocomplete="off" spellcheck="false">
+        <span class="cursor">█</span>
+      </div>
+    </div>
+  </div>
+<script>
+(function() {
+  'use strict';
+  // State Management with localStorage persistence
+  const STORAGE_KEY = 'argus_terminal_state';
+  const state = loadState();
+  
+  function loadState() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {
+      cwd: '/home/user',
+      history: [],
+      historyIndex: -1,
+      aliases: { ll: 'ls -la', cls: 'clear', h: 'history' },
+      env: { USER: 'user', HOME: '/home/user', THEME: 'green' },
+      todos: [],
+      bookmarks: { gh: 'https://github.com', gg: 'https://google.com', so: 'https://stackoverflow.com' },
+      vfs: {
+        '/': { type: 'dir', children: ['home', 'etc', 'tmp'] },
+        '/home': { type: 'dir', children: ['user'] },
+        '/home/user': { type: 'dir', children: ['documents', 'downloads', '.bashrc'] },
+        '/home/user/documents': { type: 'dir', children: [] },
+        '/home/user/downloads': { type: 'dir', children: [] },
+        '/home/user/.bashrc': { type: 'file', content: '# Startup script\necho "Welcome back!"' },
+        '/etc': { type: 'dir', children: ['hosts'] },
+        '/etc/hosts': { type: 'file', content: '127.0.0.1 localhost' },
+        '/tmp': { type: 'dir', children: [] }
+      },
+      soundEnabled: false
+    };
+  }
+  
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch(e) {}
+  }
+  
+  // DOM Elements
+  const output = document.getElementById('output');
+  const input = document.getElementById('input');
+  const promptEl = document.getElementById('prompt');
+  
+  // Utility functions
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  
+  function print(text, className = '') {
+    const line = document.createElement('div');
+    line.className = 'line ' + className;
+    line.innerHTML = escapeHtml(text);
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+  }
+  
+  function printHtml(html, className = '') {
+    const line = document.createElement('div');
+    line.className = 'line ' + className;
+    line.innerHTML = html;
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+  }
+  
+  function updatePrompt() {
+    const shortCwd = state.cwd.replace(state.env.HOME, '~');
+    promptEl.textContent = `${state.env.USER}@argus:${shortCwd}$`;
+  }
+  
+  function resolvePath(path) {
+    if (!path) return state.cwd;
+    if (path === '~') return state.env.HOME;
+    if (path.startsWith('~/')) return state.env.HOME + path.slice(1);
+    if (path.startsWith('/')) return path;
+    
+    let parts = state.cwd.split('/').filter(Boolean);
+    path.split('/').forEach(p => {
+      if (p === '..') parts.pop();
+      else if (p !== '.') parts.push(p);
+    });
+    return '/' + parts.join('/');
+  }
+  
+  function getNode(path) {
+    return state.vfs[path];
+  }
+  
+  function parentPath(path) {
+    const parts = path.split('/').filter(Boolean);
+    parts.pop();
+    return '/' + parts.join('/') || '/';
+  }
+  
+  function basename(path) {
+    const parts = path.split('/').filter(Boolean);
+    return parts[parts.length - 1] || '';
+  }
+  
+  // Commands
+  const commands = {
+    help() {
+      print('Available Commands:', 'info');
+      print('');
+      print('NAVIGATION & FILES:', 'success');
+      print('  ls [path]          - List directory contents');
+      print('  cd [path]          - Change directory');
+      print('  pwd                - Print working directory');
+      print('  mkdir <name>       - Create directory');
+      print('  touch <file>       - Create empty file');
+      print('  cat <file>         - Display file contents');
+      print('  rm <path>          - Remove file/directory');
+      print('  cp <src> <dest>    - Copy file');
+      print('  mv <src> <dest>    - Move/rename file');
+      print('');
+      print('UTILITIES:', 'success');
+      print('  clear              - Clear terminal');
+      print('  history            - Show command history');
+      print('  date               - Show current date/time');
+      print('  calc <expr>        - Calculator (e.g., calc 2+2)');
+      print('  echo <text>        - Print text');
+      print('');
+      print('ENCODING/CRYPTO:', 'success');
+      print('  base64 <e|d> <str> - Base64 encode/decode');
+      print('  hash <alg> <str>   - Hash (md5/sha256)');
+      print('  rot13 <text>       - ROT13 cipher');
+      print('');
+      print('PRODUCTIVITY:', 'success');
+      print('  todo               - Manage todo list');
+      print('  bookmarks          - Manage bookmarks');
+      print('  open <id>          - Open bookmark');
+      print('  ip                 - Show your public IP');
+      print('');
+      print('CUSTOMIZATION:', 'success');
+      print('  alias [name=cmd]   - Create/list aliases');
+      print('  export [VAR=val]   - Set environment variable');
+      print('  theme <name>       - Change theme (green/amber/purple/blue/red)');
+      print('  sound <on|off>     - Toggle typing sounds');
+      print('');
+    },
+    
+    clear() {
+      output.innerHTML = '';
+    },
+    
+    history() {
+      state.history.forEach((cmd, i) => print(`  ${i + 1}  ${cmd}`));
+    },
+    
+    date() {
+      print(new Date().toString(), 'info');
+    },
+    
+    calc(args) {
+      if (!args.length) { print('Usage: calc <expression>', 'error'); return; }
+      try {
+        const expr = args.join(' ').replace(/[^0-9+\-*/.()%\s]/g, '');
+        const result = Function('"use strict"; return (' + expr + ')')();
+        print(`= ${result}`, 'success');
+      } catch(e) { print('Invalid expression', 'error'); }
+    },
+    
+    echo(args) {
+      print(args.join(' '));
+    },
+    
+    pwd() {
+      print(state.cwd);
+    },
+    
+    cd(args) {
+      const path = resolvePath(args[0] || '~');
+      const node = getNode(path);
+      if (!node) { print(`cd: ${args[0]}: No such directory`, 'error'); return; }
+      if (node.type !== 'dir') { print(`cd: ${args[0]}: Not a directory`, 'error'); return; }
+      state.cwd = path;
+      updatePrompt();
+      saveState();
+    },
+    
+    ls(args) {
+      const showAll = args.includes('-a') || args.includes('-la') || args.includes('-al');
+      const showLong = args.includes('-l') || args.includes('-la') || args.includes('-al');
+      const targetPath = args.filter(a => !a.startsWith('-'))[0];
+      const path = resolvePath(targetPath);
+      const node = getNode(path);
+      
+      if (!node) { print(`ls: cannot access '${targetPath}': No such file or directory`, 'error'); return; }
+      if (node.type === 'file') { print(basename(path)); return; }
+      
+      let items = [...node.children];
+      if (!showAll) items = items.filter(i => !i.startsWith('.'));
+      
+      if (showLong) {
+        items.forEach(item => {
+          const itemPath = path === '/' ? '/' + item : path + '/' + item;
+          const itemNode = getNode(itemPath);
+          const typeChar = itemNode?.type === 'dir' ? 'd' : '-';
+          const perms = itemNode?.type === 'dir' ? 'rwxr-xr-x' : 'rw-r--r--';
+          const size = itemNode?.content?.length || 0;
+          const color = itemNode?.type === 'dir' ? 'info' : '';
+          print(`${typeChar}${perms}  1 user user  ${String(size).padStart(5)}  ${item}`, color);
+        });
+      } else {
+        print(items.join('  '), items.length ? '' : 'system');
+      }
+    },
+    
+    mkdir(args) {
+      if (!args[0]) { print('mkdir: missing operand', 'error'); return; }
+      const path = resolvePath(args[0]);
+      if (getNode(path)) { print(`mkdir: cannot create '${args[0]}': File exists`, 'error'); return; }
+      const parent = parentPath(path);
+      const parentNode = getNode(parent);
+      if (!parentNode || parentNode.type !== 'dir') { print(`mkdir: cannot create '${args[0]}': No such directory`, 'error'); return; }
+      state.vfs[path] = { type: 'dir', children: [] };
+      parentNode.children.push(basename(path));
+      saveState();
+    },
+    
+    touch(args) {
+      if (!args[0]) { print('touch: missing operand', 'error'); return; }
+      const path = resolvePath(args[0]);
+      if (getNode(path)) return; // File exists, just update timestamp (no-op here)
+      const parent = parentPath(path);
+      const parentNode = getNode(parent);
+      if (!parentNode || parentNode.type !== 'dir') { print(`touch: cannot touch '${args[0]}': No such directory`, 'error'); return; }
+      state.vfs[path] = { type: 'file', content: '' };
+      parentNode.children.push(basename(path));
+      saveState();
+    },
+    
+    cat(args) {
+      if (!args[0]) { print('cat: missing operand', 'error'); return; }
+      
+      // Check for write mode: cat > file or cat >> file
+      const writeIdx = args.indexOf('>');
+      const appendIdx = args.indexOf('>>');
+      
+      if (writeIdx > -1 || appendIdx > -1) {
+        const isAppend = appendIdx > -1;
+        const idx = isAppend ? appendIdx : writeIdx;
+        const fileName = args[idx + 1];
+        const content = args.slice(0, idx).join(' ');
+        
+        if (!fileName) { print('cat: missing file operand', 'error'); return; }
+        const path = resolvePath(fileName);
+        const node = getNode(path);
+        
+        if (node && node.type === 'dir') { print(`cat: ${fileName}: Is a directory`, 'error'); return; }
+        
+        if (!node) {
+          const parent = parentPath(path);
+          const parentNode = getNode(parent);
+          if (!parentNode) { print(`cat: ${fileName}: No such directory`, 'error'); return; }
+          state.vfs[path] = { type: 'file', content: content };
+          parentNode.children.push(basename(path));
+        } else {
+          node.content = isAppend ? (node.content + '\n' + content) : content;
+        }
+        saveState();
+        return;
+      }
+      
+      const path = resolvePath(args[0]);
+      const node = getNode(path);
+      if (!node) { print(`cat: ${args[0]}: No such file`, 'error'); return; }
+      if (node.type === 'dir') { print(`cat: ${args[0]}: Is a directory`, 'error'); return; }
+      if (node.content) print(node.content);
+    },
+    
+    rm(args) {
+      const recursive = args.includes('-r') || args.includes('-rf');
+      const target = args.filter(a => !a.startsWith('-'))[0];
+      if (!target) { print('rm: missing operand', 'error'); return; }
+      const path = resolvePath(target);
+      const node = getNode(path);
+      if (!node) { print(`rm: cannot remove '${target}': No such file or directory`, 'error'); return; }
+      if (node.type === 'dir' && !recursive) { print(`rm: cannot remove '${target}': Is a directory`, 'error'); return; }
+      
+      const parent = parentPath(path);
+      const parentNode = getNode(parent);
+      if (parentNode) {
+        parentNode.children = parentNode.children.filter(c => c !== basename(path));
+      }
+      delete state.vfs[path];
+      // Also delete children recursively
+      Object.keys(state.vfs).filter(k => k.startsWith(path + '/')).forEach(k => delete state.vfs[k]);
+      saveState();
+    },
+    
+    cp(args) {
+      if (args.length < 2) { print('cp: missing operand', 'error'); return; }
+      const srcPath = resolvePath(args[0]);
+      const destPath = resolvePath(args[1]);
+      const srcNode = getNode(srcPath);
+      if (!srcNode) { print(`cp: cannot stat '${args[0]}': No such file`, 'error'); return; }
+      if (srcNode.type === 'dir') { print(`cp: -r not specified; omitting directory`, 'error'); return; }
+      
+      const destNode = getNode(destPath);
+      let finalPath = destPath;
+      if (destNode && destNode.type === 'dir') {
+        finalPath = destPath + '/' + basename(srcPath);
+      }
+      
+      const parent = parentPath(finalPath);
+      const parentNode = getNode(parent);
+      if (!parentNode) { print(`cp: cannot create '${args[1]}': No such directory`, 'error'); return; }
+      
+      state.vfs[finalPath] = { type: 'file', content: srcNode.content };
+      if (!parentNode.children.includes(basename(finalPath))) {
+        parentNode.children.push(basename(finalPath));
+      }
+      saveState();
+    },
+    
+    mv(args) {
+      if (args.length < 2) { print('mv: missing operand', 'error'); return; }
+      commands.cp(args);
+      commands.rm([args[0]]);
+    },
+    
+    base64(args) {
+      if (args.length < 2) { print('Usage: base64 <encode|decode> <string>', 'error'); return; }
+      const mode = args[0].toLowerCase();
+      const str = args.slice(1).join(' ');
+      try {
+        if (mode === 'encode' || mode === 'e') {
+          print(btoa(str), 'success');
+        } else if (mode === 'decode' || mode === 'd') {
+          print(atob(str), 'success');
+        } else {
+          print('Usage: base64 <encode|decode> <string>', 'error');
+        }
+      } catch(e) { print('Invalid input', 'error'); }
+    },
+    
+    async hash(args) {
+      if (args.length < 2) { print('Usage: hash <md5|sha256> <string>', 'error'); return; }
+      const alg = args[0].toLowerCase();
+      const str = args.slice(1).join(' ');
+      
+      if (alg === 'md5') {
+        // Simple MD5 implementation
+        print(md5(str), 'success');
+      } else if (alg === 'sha256') {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(str);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        print(hashHex, 'success');
+      } else {
+        print('Supported algorithms: md5, sha256', 'error');
+      }
+    },
+    
+    rot13(args) {
+      if (!args.length) { print('Usage: rot13 <text>', 'error'); return; }
+      const str = args.join(' ');
+      const result = str.replace(/[a-zA-Z]/g, c => {
+        const base = c <= 'Z' ? 65 : 97;
+        return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base);
+      });
+      print(result, 'success');
+    },
+    
+    todo(args) {
+      const action = args[0];
+      if (!action || action === 'list') {
+        if (!state.todos.length) { print('No todos. Use "todo add <task>" to add one.', 'info'); return; }
+        state.todos.forEach((t, i) => {
+          const mark = t.done ? '[x]' : '[ ]';
+          print(`  ${i + 1}. ${mark} ${t.text}`, t.done ? 'system' : '');
+        });
+      } else if (action === 'add') {
+        const text = args.slice(1).join(' ');
+        if (!text) { print('Usage: todo add <task>', 'error'); return; }
+        state.todos.push({ text, done: false });
+        saveState();
+        print(`Added: ${text}`, 'success');
+      } else if (action === 'check' || action === 'done') {
+        const idx = parseInt(args[1]) - 1;
+        if (isNaN(idx) || !state.todos[idx]) { print('Invalid todo number', 'error'); return; }
+        state.todos[idx].done = !state.todos[idx].done;
+        saveState();
+        print(`Todo ${idx + 1} ${state.todos[idx].done ? 'completed' : 'uncompleted'}`, 'success');
+      } else if (action === 'rm' || action === 'remove') {
+        const idx = parseInt(args[1]) - 1;
+        if (isNaN(idx) || !state.todos[idx]) { print('Invalid todo number', 'error'); return; }
+        state.todos.splice(idx, 1);
+        saveState();
+        print('Todo removed', 'success');
+      } else if (action === 'clear') {
+        state.todos = [];
+        saveState();
+        print('All todos cleared', 'success');
+      } else {
+        print('Usage: todo [list|add|check|rm|clear]', 'error');
+      }
+    },
+    
+    bookmarks(args) {
+      const action = args[0];
+      if (!action || action === 'list') {
+        const keys = Object.keys(state.bookmarks);
+        if (!keys.length) { print('No bookmarks. Use "bookmarks add <id> <url>" to add one.', 'info'); return; }
+        keys.forEach(k => print(`  ${k}: ${state.bookmarks[k]}`));
+      } else if (action === 'add') {
+        const [, id, url] = args;
+        if (!id || !url) { print('Usage: bookmarks add <id> <url>', 'error'); return; }
+        state.bookmarks[id] = url;
+        saveState();
+        print(`Bookmark '${id}' added`, 'success');
+      } else if (action === 'rm' || action === 'remove') {
+        const id = args[1];
+        if (!id || !state.bookmarks[id]) { print('Bookmark not found', 'error'); return; }
+        delete state.bookmarks[id];
+        saveState();
+        print(`Bookmark '${id}' removed`, 'success');
+      }
+    },
+    
+    open(args) {
+      const id = args[0];
+      if (!id) { print('Usage: open <bookmark_id>', 'error'); return; }
+      const url = state.bookmarks[id];
+      if (!url) { print(`Bookmark '${id}' not found. Use "bookmarks" to list.`, 'error'); return; }
+      window.open(url, '_blank');
+      print(`Opening ${url}...`, 'success');
+    },
+    
+    async ip() {
+      print('Fetching IP address...', 'info');
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        print(`Public IP: ${data.ip}`, 'success');
+      } catch(e) { print('Failed to fetch IP', 'error'); }
+    },
+    
+    alias(args) {
+      if (!args.length) {
+        Object.entries(state.aliases).forEach(([k, v]) => print(`alias ${k}='${v}'`));
+        return;
+      }
+      const match = args.join(' ').match(/^(\w+)=(.+)$/);
+      if (match) {
+        state.aliases[match[1]] = match[2].replace(/^['"]|['"]$/g, '');
+        saveState();
+        print(`Alias set: ${match[1]}`, 'success');
+      } else {
+        print('Usage: alias name=command', 'error');
+      }
+    },
+    
+    export(args) {
+      if (!args.length) {
+        Object.entries(state.env).forEach(([k, v]) => print(`${k}=${v}`));
+        return;
+      }
+      const match = args.join(' ').match(/^(\w+)=(.*)$/);
+      if (match) {
+        state.env[match[1]] = match[2];
+        saveState();
+        print(`${match[1]}=${match[2]}`, 'success');
+      }
+    },
+    
+    theme(args) {
+      const themes = ['green', 'amber', 'purple', 'blue', 'red'];
+      const theme = args[0]?.toLowerCase();
+      if (!theme || !themes.includes(theme)) {
+        print(`Available themes: ${themes.join(', ')}`, 'info');
+        return;
+      }
+      document.body.className = theme === 'green' ? '' : `theme-${theme}`;
+      state.env.THEME = theme;
+      saveState();
+      print(`Theme changed to ${theme}`, 'success');
+    },
+    
+    sound(args) {
+      if (args[0] === 'on') {
+        state.soundEnabled = true;
+        saveState();
+        print('Typing sounds enabled', 'success');
+      } else if (args[0] === 'off') {
+        state.soundEnabled = false;
+        saveState();
+        print('Typing sounds disabled', 'success');
+      } else {
+        print(`Sound is ${state.soundEnabled ? 'on' : 'off'}. Use: sound <on|off>`, 'info');
+      }
+    }
+  };
+  
+  // Simple MD5 implementation
+  function md5(string) {
+    function rotateLeft(val, shift) { return (val << shift) | (val >>> (32 - shift)); }
+    function addUnsigned(x, y) { return (x + y) >>> 0; }
+    function F(x, y, z) { return (x & y) | (~x & z); }
+    function G(x, y, z) { return (x & z) | (y & ~z); }
+    function H(x, y, z) { return x ^ y ^ z; }
+    function I(x, y, z) { return y ^ (x | ~z); }
+    
+    function FF(a, b, c, d, x, s, ac) { return addUnsigned(rotateLeft(addUnsigned(a, addUnsigned(addUnsigned(F(b, c, d), x), ac)), s), b); }
+    function GG(a, b, c, d, x, s, ac) { return addUnsigned(rotateLeft(addUnsigned(a, addUnsigned(addUnsigned(G(b, c, d), x), ac)), s), b); }
+    function HH(a, b, c, d, x, s, ac) { return addUnsigned(rotateLeft(addUnsigned(a, addUnsigned(addUnsigned(H(b, c, d), x), ac)), s), b); }
+    function II(a, b, c, d, x, s, ac) { return addUnsigned(rotateLeft(addUnsigned(a, addUnsigned(addUnsigned(I(b, c, d), x), ac)), s), b); }
+    
+    function wordToHex(val) {
+      let result = '';
+      for (let i = 0; i <= 3; i++) {
+        result += ((val >>> (i * 8)) & 255).toString(16).padStart(2, '0');
+      }
+      return result;
+    }
+    
+    const utf8 = unescape(encodeURIComponent(string));
+    const len = utf8.length;
+    const words = [];
+    for (let i = 0; i < len; i += 4) {
+      words.push((utf8.charCodeAt(i) || 0) | ((utf8.charCodeAt(i + 1) || 0) << 8) | ((utf8.charCodeAt(i + 2) || 0) << 16) | ((utf8.charCodeAt(i + 3) || 0) << 24));
+    }
+    words[len >> 2] |= 0x80 << ((len % 4) * 8);
+    words[(((len + 8) >>> 6) << 4) + 14] = len * 8;
+    
+    let a = 0x67452301, b = 0xEFCDAB89, c = 0x98BADCFE, d = 0x10325476;
+    
+    for (let i = 0; i < words.length; i += 16) {
+      const aa = a, bb = b, cc = c, dd = d;
+      const x = words.slice(i, i + 16);
+      while (x.length < 16) x.push(0);
+      
+      a = FF(a, b, c, d, x[0], 7, 0xD76AA478); d = FF(d, a, b, c, x[1], 12, 0xE8C7B756);
+      c = FF(c, d, a, b, x[2], 17, 0x242070DB); b = FF(b, c, d, a, x[3], 22, 0xC1BDCEEE);
+      a = FF(a, b, c, d, x[4], 7, 0xF57C0FAF); d = FF(d, a, b, c, x[5], 12, 0x4787C62A);
+      c = FF(c, d, a, b, x[6], 17, 0xA8304613); b = FF(b, c, d, a, x[7], 22, 0xFD469501);
+      a = FF(a, b, c, d, x[8], 7, 0x698098D8); d = FF(d, a, b, c, x[9], 12, 0x8B44F7AF);
+      c = FF(c, d, a, b, x[10], 17, 0xFFFF5BB1); b = FF(b, c, d, a, x[11], 22, 0x895CD7BE);
+      a = FF(a, b, c, d, x[12], 7, 0x6B901122); d = FF(d, a, b, c, x[13], 12, 0xFD987193);
+      c = FF(c, d, a, b, x[14], 17, 0xA679438E); b = FF(b, c, d, a, x[15], 22, 0x49B40821);
+      
+      a = GG(a, b, c, d, x[1], 5, 0xF61E2562); d = GG(d, a, b, c, x[6], 9, 0xC040B340);
+      c = GG(c, d, a, b, x[11], 14, 0x265E5A51); b = GG(b, c, d, a, x[0], 20, 0xE9B6C7AA);
+      a = GG(a, b, c, d, x[5], 5, 0xD62F105D); d = GG(d, a, b, c, x[10], 9, 0x02441453);
+      c = GG(c, d, a, b, x[15], 14, 0xD8A1E681); b = GG(b, c, d, a, x[4], 20, 0xE7D3FBC8);
+      a = GG(a, b, c, d, x[9], 5, 0x21E1CDE6); d = GG(d, a, b, c, x[14], 9, 0xC33707D6);
+      c = GG(c, d, a, b, x[3], 14, 0xF4D50D87); b = GG(b, c, d, a, x[8], 20, 0x455A14ED);
+      a = GG(a, b, c, d, x[13], 5, 0xA9E3E905); d = GG(d, a, b, c, x[2], 9, 0xFCEFA3F8);
+      c = GG(c, d, a, b, x[7], 14, 0x676F02D9); b = GG(b, c, d, a, x[12], 20, 0x8D2A4C8A);
+      
+      a = HH(a, b, c, d, x[5], 4, 0xFFFA3942); d = HH(d, a, b, c, x[8], 11, 0x8771F681);
+      c = HH(c, d, a, b, x[11], 16, 0x6D9D6122); b = HH(b, c, d, a, x[14], 23, 0xFDE5380C);
+      a = HH(a, b, c, d, x[1], 4, 0xA4BEEA44); d = HH(d, a, b, c, x[4], 11, 0x4BDECFA9);
+      c = HH(c, d, a, b, x[7], 16, 0xF6BB4B60); b = HH(b, c, d, a, x[10], 23, 0xBEBFBC70);
+      a = HH(a, b, c, d, x[13], 4, 0x289B7EC6); d = HH(d, a, b, c, x[0], 11, 0xEAA127FA);
+      c = HH(c, d, a, b, x[3], 16, 0xD4EF3085); b = HH(b, c, d, a, x[6], 23, 0x04881D05);
+      a = HH(a, b, c, d, x[9], 4, 0xD9D4D039); d = HH(d, a, b, c, x[12], 11, 0xE6DB99E5);
+      c = HH(c, d, a, b, x[15], 16, 0x1FA27CF8); b = HH(b, c, d, a, x[2], 23, 0xC4AC5665);
+      
+      a = II(a, b, c, d, x[0], 6, 0xF4292244); d = II(d, a, b, c, x[7], 10, 0x432AFF97);
+      c = II(c, d, a, b, x[14], 15, 0xAB9423A7); b = II(b, c, d, a, x[5], 21, 0xFC93A039);
+      a = II(a, b, c, d, x[12], 6, 0x655B59C3); d = II(d, a, b, c, x[3], 10, 0x8F0CCC92);
+      c = II(c, d, a, b, x[10], 15, 0xFFEFF47D); b = II(b, c, d, a, x[1], 21, 0x85845DD1);
+      a = II(a, b, c, d, x[8], 6, 0x6FA87E4F); d = II(d, a, b, c, x[15], 10, 0xFE2CE6E0);
+      c = II(c, d, a, b, x[6], 15, 0xA3014314); b = II(b, c, d, a, x[13], 21, 0x4E0811A1);
+      a = II(a, b, c, d, x[4], 6, 0xF7537E82); d = II(d, a, b, c, x[11], 10, 0xBD3AF235);
+      c = II(c, d, a, b, x[2], 15, 0x2AD7D2BB); b = II(b, c, d, a, x[9], 21, 0xEB86D391);
+      
+      a = addUnsigned(a, aa); b = addUnsigned(b, bb); c = addUnsigned(c, cc); d = addUnsigned(d, dd);
+    }
+    
+    return wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d);
+  }
+  
+  // Execute command
+  async function execute(cmdLine) {
+    if (!cmdLine.trim()) return;
+    
+    state.history.push(cmdLine);
+    state.historyIndex = -1;
+    saveState();
+    
+    print(`${promptEl.textContent} ${cmdLine}`, 'command');
+    
+    // Handle multiple commands with && or ;
+    const cmds = cmdLine.split(/\s*(?:&&|;)\s*/);
+    
+    for (const cmd of cmds) {
+      let [command, ...args] = cmd.trim().split(/\s+/);
+      if (!command) continue;
+      
+      // Check aliases
+      if (state.aliases[command]) {
+        const aliased = state.aliases[command].split(/\s+/);
+        command = aliased[0];
+        args = [...aliased.slice(1), ...args];
+      }
+      
+      // Execute script files
+      if (command.startsWith('./')) {
+        const path = resolvePath(command.slice(2));
+        const node = getNode(path);
+        if (node && node.type === 'file' && node.content) {
+          const lines = node.content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+          for (const line of lines) await execute(line);
+        } else {
+          print(`bash: ${command}: No such file`, 'error');
+        }
+        continue;
+      }
+      
+      if (commands[command]) {
+        await commands[command](args);
+      } else {
+        print(`${command}: command not found`, 'error');
+      }
+    }
+  }
+  
+  // Tab completion
+  function tabComplete(partial) {
+    const parts = partial.split(/\s+/);
+    const last = parts[parts.length - 1] || '';
+    
+    // Command completion
+    if (parts.length === 1) {
+      const matches = Object.keys(commands).filter(c => c.startsWith(last));
+      if (matches.length === 1) return partial.slice(0, -last.length) + matches[0] + ' ';
+      if (matches.length > 1) { print(matches.join('  '), 'info'); return partial; }
+    }
+    
+    // Path completion
+    const dir = last.includes('/') ? resolvePath(last.substring(0, last.lastIndexOf('/')) || '/') : state.cwd;
+    const prefix = last.includes('/') ? last.substring(last.lastIndexOf('/') + 1) : last;
+    const node = getNode(dir);
+    
+    if (node && node.type === 'dir') {
+      const matches = node.children.filter(c => c.startsWith(prefix));
+      if (matches.length === 1) {
+        const base = parts.slice(0, -1).join(' ');
+        const pathPrefix = last.includes('/') ? last.substring(0, last.lastIndexOf('/') + 1) : '';
+        return (base ? base + ' ' : '') + pathPrefix + matches[0];
+      }
+      if (matches.length > 1) print(matches.join('  '), 'info');
+    }
+    
+    return partial;
+  }
+  
+  // Event handlers
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      await execute(input.value);
+      input.value = '';
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (state.history.length && state.historyIndex < state.history.length - 1) {
+        state.historyIndex++;
+        input.value = state.history[state.history.length - 1 - state.historyIndex];
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (state.historyIndex > 0) {
+        state.historyIndex--;
+        input.value = state.history[state.history.length - 1 - state.historyIndex];
+      } else if (state.historyIndex === 0) {
+        state.historyIndex = -1;
+        input.value = '';
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      input.value = tabComplete(input.value);
+    } else if (e.key === 'l' && e.ctrlKey) {
+      e.preventDefault();
+      commands.clear();
+    }
+  });
+  
+  // Click to focus
+  document.querySelector('.terminal').addEventListener('click', () => input.focus());
+  
+  // Welcome message
+  function showWelcome() {
+    printHtml(`<pre class="ascii-art text-glow">
+    _    ____   ____ _   _ ____  
+   / \\  |  _ \\ / ___| | | / ___| 
+  / _ \\ | |_) | |  _| | | \\___ \\ 
+ / ___ \\|  _ <| |_| | |_| |___) |
+/_/   \\_\\_| \\_\\\\____|\\___/|____/ 
+    </pre>`);
+    print('');
+    print('ARGUS TERMINAL v2.0.0 - InfoSec Browser Terminal', 'success');
+    print(`System: ${navigator.platform} | Browser: ${navigator.userAgent.split(' ').pop()}`, 'system');
+    print(`Memory: ${navigator.deviceMemory || 'N/A'}GB | Cores: ${navigator.hardwareConcurrency || 'N/A'}`, 'system');
+    print('');
+    print('Type "help" for available commands.', 'info');
+    print('');
+  }
+  
+  // Initialize
+  function init() {
+    // Apply saved theme
+    if (state.env.THEME && state.env.THEME !== 'green') {
+      document.body.className = `theme-${state.env.THEME}`;
+    }
+    updatePrompt();
+    showWelcome();
+    
+    // Run startup script
+    const bashrc = getNode('/home/user/.bashrc');
+    if (bashrc && bashrc.content) {
+      const lines = bashrc.content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+      lines.forEach(line => execute(line));
+    }
+    
+    input.focus();
+  }
+  
+  init();
+})();
+</script>
+</body>
+</html>
