@@ -7,7 +7,7 @@ import Notes from './pages/Notes';
 function App() {
   return (
     <VectorProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <div className="h-screen w-screen bg-black crt-scanlines crt-screen overflow-hidden">
           <Routes>
             <Route path="/" element={<Home />} />
