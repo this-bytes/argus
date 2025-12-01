@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { VectorProvider } from './context/VectorContext';
+import { ArgusProvider } from './context/ArgusContext';
 import Home from './pages/Home';
-import Config from './pages/Config';
+import Config from './pages/ConfigV2';
 import Notes from './pages/Notes';
 
 function App() {
   return (
-    <VectorProvider>
+    <ArgusProvider>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <div className="h-screen w-screen bg-black crt-scanlines crt-screen overflow-hidden">
           <Routes>
@@ -16,7 +16,7 @@ function App() {
           </Routes>
         </div>
       </BrowserRouter>
-    </VectorProvider>
+    </ArgusProvider>
   );
 }
 

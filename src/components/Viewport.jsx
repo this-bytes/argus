@@ -107,28 +107,28 @@ function WelcomeCard() {
       <div className="mb-6">
         <pre className="text-green-500 text-xs leading-tight text-glow inline-block text-left">
 {`
- _    __ ______ ______ ______ ____   ____  
-| |  / // ____// ____//_  __// __ \\ / __ \\ 
-| | / // __/  / /      / /  / / / // /_/ / 
-| |/ // /___ / /___   / /  / /_/ // _, _/  
-|___//_____/ \\____/  /_/   \\____//_/ |_|   
+    ___    ____  _______ ______
+   /   |  / __ \\/ ____/ / / ___/
+  / /| | / /_/ / / __/ / /\\__ \\ 
+ / ___ |/ _, _/ /_/ / /_/ /__/ / 
+/_/  |_/_/ |_|\\____/\\____/____/  
 `}
         </pre>
       </div>
 
       <h2 className="text-xl text-green-500 mb-4">
-        WELCOME TO VECTOR
+        WELCOME TO ARGUS
       </h2>
 
       <div className="text-green-500/70 text-sm space-y-2 mb-6">
-        <p>A retro-styled resource launcher and terminal.</p>
-        <p>Use the terminal on the left to navigate.</p>
+        <p>Your InfoSec browser command center.</p>
+        <p>Manage bookmarks, feeds, aliases, and scripts.</p>
       </div>
 
       <div className="text-green-500/50 text-xs space-y-1">
         <p>Type <span className="text-green-400">help</span> for available commands</p>
-        <p>Type <span className="text-green-400">ls</span> to list resources</p>
-        <p>Type <span className="text-green-400">open [id]</span> to launch a resource</p>
+        <p>Type <span className="text-green-400">bm</span> to list bookmarks</p>
+        <p>Type <span className="text-green-400">go [alias]</span> to quick-launch</p>
       </div>
     </div>
   );

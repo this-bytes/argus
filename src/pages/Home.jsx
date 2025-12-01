@@ -1,5 +1,5 @@
-import Terminal from '../components/Terminal';
-import Viewport from '../components/Viewport';
+import Terminal from '../components/TerminalV2';
+import Viewport from '../components/ViewportV2';
 
 function Home() {
   return (

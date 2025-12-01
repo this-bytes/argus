@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { useVector } from '../context/useVector';
+import { useArgus } from '../context/useArgus';
 
 function Notes() {
-  const { notes, setNotes } = useVector();
+  const { notes, setNotes } = useArgus();
   const [isPreview, setIsPreview] = useState(false);
 
   const handleChange = (e) => {

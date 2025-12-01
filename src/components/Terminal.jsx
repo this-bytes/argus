@@ -5,7 +5,8 @@ import { useVector } from '../context/useVector';
 function Terminal() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState([
-    { type: 'system', text: 'VECTOR TERMINAL v1.0.0' },
+    { type: 'system', text: 'ARGUS TERMINAL v2.0.0' },
+    { type: 'system', text: 'Your InfoSec browser command center.' },
     { type: 'system', text: 'Type "help" for available commands.' },
     { type: 'system', text: '' },
   ]);
@@ -130,7 +131,7 @@ function Terminal() {
 
       case 'clear':
         setOutput([
-          { type: 'system', text: 'VECTOR TERMINAL v1.0.0' },
+          { type: 'system', text: 'ARGUS TERMINAL v2.0.0' },
           { type: 'system', text: '' },
         ]);
         break;
@@ -225,7 +226,7 @@ function Terminal() {
         <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm shadow-red-500/50"></div>
         <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-sm shadow-yellow-500/50"></div>
         <div className="w-3 h-3 rounded-full bg-green-500 shadow-sm shadow-green-500/50"></div>
-        <span className="ml-2 text-green-400 text-sm font-bold tracking-wider">VECTOR TERMINAL</span>
+        <span className="ml-2 text-green-400 text-sm font-bold tracking-wider">ARGUS TERMINAL</span>
       </div>
 
       {/* Terminal output */}
@@ -249,7 +250,7 @@ function Terminal() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="terminal-input flex-1 text-sm"
+          className="terminal-input flex-1 text-sm text-green-400 placeholder-green-700"
           placeholder="Enter command..."
           autoComplete="off"
           autoCorrect="off"
