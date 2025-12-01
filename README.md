@@ -1,16 +1,37 @@
-# React + Vite
+# Argus
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Argus is a Vite-powered React single-page app. This repository now includes everything required to run the project locally and deploy it automatically to GitHub Pages.
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 20+
+- npm 10+
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install            # install dependencies once
+npm run dev            # start Vite at http://localhost:5173
+```
 
-## Expanding the ESLint configuration
+Vite hot-module reloading is enabled out of the box. When you are ready to check the production output locally, run `npm run build` followed by `npm run preview` to serve the optimized bundle from `dist/`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Production builds
+
+```bash
+npm run build          # outputs to dist/
+```
+
+The build reads `.env.production` and sets the Vite base path to `/argus/`, which is required for GitHub Pages. If you fork the project into a repository with a different name, update `VITE_BASE_PATH` accordingly.
+
+## Deployment
+
+GitHub Actions automatically builds and deploys the site to Pages on every push to `main`.
+
+1. Open **Settings → Pages** and choose “GitHub Actions” as the source (if not already enabled).
+2. Review `.github/workflows/deploy.yml` to see the workflow that runs `npm ci`, `npm run build`, and uploads `dist/`.
+3. Push to `main`. The `deploy` job will publish the latest artifact and output the live URL as a workflow summary.
+
+### Manual alternative
+
+If you ever need to deploy without GitHub Actions, you can still run `npm run build` locally and publish the `dist/` directory to any static host (Cloudflare Pages, Netlify, Vercel, etc.). Just be sure that the host serves the site from `/argus/` or updates `VITE_BASE_PATH` to match the host’s sub-path.
