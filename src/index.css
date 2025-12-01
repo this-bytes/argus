@@ -191,15 +191,49 @@ body {
   box-sizing: border-box;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .split-pane {
     flex-direction: row;
+    padding: 1.5rem;
+    gap: 1.5rem;
   }
 }
 
-.split-pane-left,
+@media (min-width: 1024px) {
+  .split-pane {
+    padding: 2rem;
+    gap: 2rem;
+  }
+}
+
+.split-pane-left {
+  flex: 1;
+  min-height: 300px;
+  min-width: 0;
+}
+
 .split-pane-right {
   flex: 1;
-  min-height: 0;
+  min-height: 300px;
   min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .split-pane-left {
+    flex: 0 0 45%;
+    max-width: 600px;
+    min-height: 0;
+  }
+
+  .split-pane-right {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  .split-pane-left {
+    flex: 0 0 40%;
+    max-width: 700px;
+  }
 }

@@ -5,17 +5,17 @@ function Viewport() {
 
   if (viewport.type === 'iframe' && viewport.resource) {
     return (
-      <div className="h-full flex flex-col bg-black/50 border border-green-500/50 rounded-sm overflow-hidden">
+      <div className="h-full flex flex-col bg-black/80 border-2 border-green-500/60 rounded-lg overflow-hidden shadow-lg shadow-green-500/10">
         {/* Viewport header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-green-500/30 bg-black/30">
-          <span className="text-green-500/70 text-sm truncate">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-green-500/40 bg-gradient-to-r from-green-900/30 to-black/50">
+          <span className="text-green-400 text-sm font-bold truncate tracking-wider">
             {viewport.resource.name}
           </span>
           <a
             href={viewport.resource.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-green-500/50 hover:text-green-500 text-xs transition-colors"
+            className="text-green-500/70 hover:text-green-400 text-xs transition-colors font-bold"
           >
             [OPEN EXTERNAL]
           </a>
@@ -36,10 +36,10 @@ function Viewport() {
 
   // Launch Card fallback
   return (
-    <div className="h-full flex flex-col bg-black/50 border border-green-500/50 rounded-sm overflow-hidden">
+    <div className="h-full flex flex-col bg-black/80 border-2 border-green-500/60 rounded-lg overflow-hidden shadow-lg shadow-green-500/10">
       {/* Viewport header */}
-      <div className="flex items-center px-3 py-2 border-b border-green-500/30 bg-black/30">
-        <span className="text-green-500/70 text-sm">VIEWPORT</span>
+      <div className="flex items-center px-4 py-3 border-b border-green-500/40 bg-gradient-to-r from-green-900/30 to-black/50">
+        <span className="text-green-400 text-sm font-bold tracking-wider">VIEWPORT</span>
       </div>
 
       {/* Launch Card content */}

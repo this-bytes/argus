@@ -22,9 +22,13 @@ function Terminal() {
     }
   }, [output]);
 
-  // Focus input on mount and when clicking terminal
+  // Focus input on mount
   useEffect(() => {
-    inputRef.current?.focus();
+    // Small delay to ensure DOM is ready (helps on mobile)
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleTerminalClick = () => {
@@ -171,6 +175,8 @@ function Terminal() {
       processCommand(input);
       setInput('');
       setHistoryIndex(-1);
+      // Refocus after command
+      setTimeout(() => inputRef.current?.focus(), 0);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       const filteredHistory = commandHistory.map((h) => h.command);
@@ -211,21 +217,21 @@ function Terminal() {
 
   return (
     <div
-      className="h-full flex flex-col bg-black/50 border border-green-500/50 rounded-sm overflow-hidden cursor-text"
+      className="h-full flex flex-col bg-black/80 border-2 border-green-500/60 rounded-lg overflow-hidden cursor-text shadow-lg shadow-green-500/10"
       onClick={handleTerminalClick}
     >
       {/* Terminal header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-green-500/30 bg-black/30">
-        <div className="w-3 h-3 rounded-full bg-red-500/70"></div>
-        <div className="w-3 h-3 rounded-full bg-yellow-500/70"></div>
-        <div className="w-3 h-3 rounded-full bg-green-500/70"></div>
-        <span className="ml-2 text-green-500/70 text-sm">VECTOR TERMINAL</span>
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-green-500/40 bg-gradient-to-r from-green-900/30 to-black/50">
+        <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm shadow-red-500/50"></div>
+        <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-sm shadow-yellow-500/50"></div>
+        <div className="w-3 h-3 rounded-full bg-green-500 shadow-sm shadow-green-500/50"></div>
+        <span className="ml-2 text-green-400 text-sm font-bold tracking-wider">VECTOR TERMINAL</span>
       </div>
 
       {/* Terminal output */}
       <div
         ref={outputRef}
-        className="flex-1 overflow-y-auto p-3 font-mono text-sm"
+        className="flex-1 overflow-y-auto p-4 font-mono text-sm leading-relaxed"
       >
         {output.map((line, index) => (
           <div key={index} className={`${getTextColor(line.type)} whitespace-pre-wrap`}>
@@ -235,7 +241,7 @@ function Terminal() {
       </div>
 
       {/* Terminal input */}
-      <div className="flex items-center px-3 py-2 border-t border-green-500/30 bg-black/30">
+      <div className="flex items-center px-4 py-3 border-t border-green-500/40 bg-gradient-to-r from-black/50 to-green-900/20">
         <span className="text-green-500 mr-2">{'>'}</span>
         <input
           ref={inputRef}
@@ -246,7 +252,10 @@ function Terminal() {
           className="terminal-input flex-1 text-sm"
           placeholder="Enter command..."
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           spellCheck="false"
+          autoFocus
         />
         <span className="text-green-500 cursor-blink">█</span>
       </div>
