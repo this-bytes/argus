@@ -1,24 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useArgus } from '../context/useArgus';
 import QuickLauncher from './QuickLauncher';
-import { THEMES } from '../utils/themes';
 
 function Viewport() {
-  const { viewport, bookmarks, feeds, settings, getActiveTodoCount, timer } = useArgus();
-  const theme = THEMES[settings?.theme] || THEMES.green;
-
-  // Get theme-aware classes
-  const getThemeClasses = () => {
-    const accent = theme.accent || 'green';
-    return {
-      border: `border-${accent}-500/60`,
-      headerBg: `bg-gradient-to-r from-${accent}-900/40 to-black/60`,
-      headerBorder: `border-${accent}-500/40`,
-      text: `text-${accent}-400`,
-      textMuted: `text-${accent}-500/50`,
-      shadow: `shadow-${accent}-500/20`,
-    };
-  };
+  const { viewport, bookmarks, feeds } = useArgus();
 
   // Iframe view
   if (viewport.type === 'iframe' && viewport.data) {
@@ -166,7 +151,7 @@ function FeedCard({ feed }) {
 }
 
 function WelcomeCard() {
-  const { getActiveTodoCount, timer, settings } = useArgus();
+  const { getActiveTodoCount, timer } = useArgus();
   const todoCount = getActiveTodoCount ? getActiveTodoCount() : 0;
   
   return (

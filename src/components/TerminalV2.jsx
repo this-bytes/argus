@@ -45,7 +45,6 @@ function Terminal() {
     addTodo,
     toggleTodo,
     deleteTodo,
-    getActiveTodoCount,
     // Workspaces
     activeWorkspace,
     switchWorkspace,
@@ -544,7 +543,7 @@ function Terminal() {
         break;
 
       case 'time':
-      case 'date':
+      case 'date': {
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         const timeStr = settings.militaryTime 
@@ -556,6 +555,7 @@ function Terminal() {
           { type: 'system', text: '' },
         ]);
         break;
+      }
 
       case 'history':
         if (commandHistory.length === 0) {
@@ -821,7 +821,8 @@ function Terminal() {
       case 'timer': {
         if (args.length === 0) {
           if (timer) {
-            const remaining = timer.endTime - Date.now();
+            // Use getTimerRemaining from context to get remaining time
+            const remaining = timer.endTime > 0 ? Math.max(0, timer.endTime - new Date().getTime()) : 0;
             if (remaining > 0) {
               const mins = Math.floor(remaining / 60000);
               const secs = Math.floor((remaining % 60000) / 1000);
@@ -983,7 +984,7 @@ function Terminal() {
         break;
       }
 
-      default:
+      default: {
         // Check if it's a bookmark ID for quick open
         const matchedBookmark = bookmarks.find((b) => b.id === command);
         if (matchedBookmark) {
@@ -999,6 +1000,7 @@ function Terminal() {
             { type: 'system', text: '' },
           ]);
         }
+      }
     }
   };
 
