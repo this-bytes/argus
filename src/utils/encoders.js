@@ -1,18 +1,24 @@
 // Encoding/Decoding utilities
 
-// Base64 encode
+// Base64 encode with proper UTF-8 support
 export function base64Encode(str) {
   try {
-    return btoa(unescape(encodeURIComponent(str)));
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const binString = Array.from(data, (byte) => String.fromCodePoint(byte)).join('');
+    return btoa(binString);
   } catch {
     return null;
   }
 }
 
-// Base64 decode
+// Base64 decode with proper UTF-8 support
 export function base64Decode(str) {
   try {
-    return decodeURIComponent(escape(atob(str)));
+    const binString = atob(str);
+    const bytes = Uint8Array.from(binString, (c) => c.codePointAt(0));
+    const decoder = new TextDecoder();
+    return decoder.decode(bytes);
   } catch {
     return null;
   }
@@ -53,7 +59,7 @@ export function hexDecode(str) {
     const hex = str.replace(/\s/g, '');
     let result = '';
     for (let i = 0; i < hex.length; i += 2) {
-      result += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+      result += String.fromCharCode(parseInt(hex.substring(i, i + 2), 16));
     }
     return result;
   } catch {
