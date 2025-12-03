@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useArgus } from '../context/useArgus';
+import { BANG_ENGINES, parseBang, isUrl, getIpLookupUrls, getDomainLookupUrls, getCveLookupUrls, getHashLookupUrls } from '../utils/lookups';
+import { base64Encode, base64Decode, urlEncode, urlDecode } from '../utils/encoders';
+import { getHttpCode, getHttpCategory } from '../data/httpCodes';
+import { THEMES } from '../utils/themes';
 
 function Terminal() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState([
-    { type: 'system', text: 'ARGUS TERMINAL v2.0.0' },
+    { type: 'system', text: 'ARGUS TERMINAL v3.0.0' },
     { type: 'system', text: 'Your InfoSec browser command center.' },
     { type: 'system', text: 'Type "help" for available commands.' },
     { type: 'system', text: '' },
@@ -30,8 +34,30 @@ function Terminal() {
     showFeeds,
     showWelcome,
     settings,
+    updateSettings,
+    // New features
+    recordUsage,
+    recordNavigation,
+    getRecentNavigations,
+    getMostUsedBookmarks,
+    // Todos
+    todos,
+    addTodo,
+    toggleTodo,
+    deleteTodo,
+    // Workspaces
+    activeWorkspace,
+    switchWorkspace,
+    // Timer
+    timer,
+    startTimer,
+    stopTimer,
+    // Notes
+    notes,
+    setNotes,
   } = useArgus();
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [lastCommand, setLastCommand] = useState('');
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -60,9 +86,72 @@ function Terminal() {
     const trimmedCmd = cmd.trim();
     if (!trimmedCmd) return;
 
+    // Handle !! to repeat last command
+    if (trimmedCmd === '!!') {
+      if (lastCommand) {
+        processCommand(lastCommand);
+      } else {
+        addOutput([
+          { type: 'error', text: 'No previous command to repeat.' },
+          { type: 'system', text: '' },
+        ]);
+      }
+      return;
+    }
+
+    // Handle !<prefix> to repeat last command starting with prefix
+    if (trimmedCmd.startsWith('!') && trimmedCmd.length > 1 && !trimmedCmd.startsWith('!g') && !trimmedCmd.startsWith('!gh')) {
+      const prefix = trimmedCmd.slice(1);
+      const bangResult = parseBang(trimmedCmd);
+      // Only treat as history if it's not a bang search
+      if (!bangResult) {
+        const match = [...commandHistory].reverse().find(h => h.command.startsWith(prefix));
+        if (match) {
+          processCommand(match.command);
+          return;
+        }
+      }
+    }
+
+    // Handle bang syntax (!g, !gh, etc.)
+    const bangResult = parseBang(trimmedCmd);
+    if (bangResult) {
+      const { engine, query } = bangResult;
+      const url = engine.url + encodeURIComponent(query);
+      addOutput([
+        { type: 'command', text: `${settings.terminalPrompt} ${trimmedCmd}` },
+        { type: 'success', text: `Searching ${engine.name}: "${query}"...` },
+        { type: 'system', text: '' },
+      ]);
+      addToHistory({ command: trimmedCmd });
+      setLastCommand(trimmedCmd);
+      recordNavigation(url, `${engine.name} Search`, 'bang');
+      window.open(url, '_blank');
+      return;
+    }
+
+    // Handle URL-like input (omnibox behavior)
+    if (isUrl(trimmedCmd)) {
+      let url = trimmedCmd;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      addOutput([
+        { type: 'command', text: `${settings.terminalPrompt} ${trimmedCmd}` },
+        { type: 'success', text: `Opening ${url}...` },
+        { type: 'system', text: '' },
+      ]);
+      addToHistory({ command: trimmedCmd });
+      setLastCommand(trimmedCmd);
+      recordNavigation(url, url, 'direct');
+      window.open(url, '_blank');
+      return;
+    }
+
     // Add command to output
     addOutput([{ type: 'command', text: `${settings.terminalPrompt} ${trimmedCmd}` }]);
     addToHistory({ command: trimmedCmd });
+    setLastCommand(trimmedCmd);
 
     const parts = trimmedCmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
     const command = parts[0]?.toLowerCase();
@@ -72,39 +161,112 @@ function Terminal() {
       case 'help':
       case '?':
         addOutput([
-          { type: 'info', text: '┌─────────────────────────────────────────┐' },
-          { type: 'info', text: '│          ARGUS COMMAND REFERENCE        │' },
-          { type: 'info', text: '├─────────────────────────────────────────┤' },
-          { type: 'info', text: '│  NAVIGATION                             │' },
-          { type: 'info', text: '│    go <alias> [query]  Quick navigate   │' },
-          { type: 'info', text: '│    open <url>          Open URL         │' },
-          { type: 'info', text: '│                                         │' },
-          { type: 'info', text: '│  BOOKMARKS                              │' },
-          { type: 'info', text: '│    bm                  List bookmarks   │' },
-          { type: 'info', text: '│    bm add <name> <url> Add bookmark     │' },
-          { type: 'info', text: '│    bm rm <id>          Remove bookmark  │' },
-          { type: 'info', text: '│    bm tag <tag>        Filter by tag    │' },
-          { type: 'info', text: '│                                         │' },
-          { type: 'info', text: '│  ALIASES                                │' },
-          { type: 'info', text: '│    alias               List aliases     │' },
-          { type: 'info', text: '│    alias add <a> <url> Add alias        │' },
-          { type: 'info', text: '│    alias rm <alias>    Remove alias     │' },
-          { type: 'info', text: '│                                         │' },
-          { type: 'info', text: '│  FEEDS & CONTENT                        │' },
-          { type: 'info', text: '│    feeds               Show RSS feeds   │' },
-          { type: 'info', text: '│    scripts             List scripts     │' },
-          { type: 'info', text: '│                                         │' },
-          { type: 'info', text: '│  UTILITIES                              │' },
-          { type: 'info', text: '│    note                Open notes       │' },
-          { type: 'info', text: '│    config              Configuration    │' },
-          { type: 'info', text: '│    clear               Clear terminal   │' },
-          { type: 'info', text: '│    history             Command history  │' },
-          { type: 'info', text: '│    time                Show date/time   │' },
-          { type: 'info', text: '│    home                Reset viewport   │' },
-          { type: 'info', text: '└─────────────────────────────────────────┘' },
+          { type: 'info', text: '┌───────────────────────────────────────────────┐' },
+          { type: 'info', text: '│            ARGUS COMMAND REFERENCE            │' },
+          { type: 'info', text: '├───────────────────────────────────────────────┤' },
+          { type: 'info', text: '│  NAVIGATION                                   │' },
+          { type: 'info', text: '│    go <alias> [query]    Quick navigate       │' },
+          { type: 'info', text: '│    open <url>            Open URL             │' },
+          { type: 'info', text: '│    s <query>             Smart search         │' },
+          { type: 'info', text: '│    !g <query>            Google search        │' },
+          { type: 'info', text: '│    !gh <query>           GitHub search        │' },
+          { type: 'info', text: '│                                               │' },
+          { type: 'info', text: '│  BOOKMARKS                                    │' },
+          { type: 'info', text: '│    bm                    List bookmarks       │' },
+          { type: 'info', text: '│    bm add <name> <url>   Add bookmark         │' },
+          { type: 'info', text: '│    bm rm <id>            Remove bookmark      │' },
+          { type: 'info', text: '│    bm tag <tag>          Filter by tag        │' },
+          { type: 'info', text: '│                                               │' },
+          { type: 'info', text: '│  INFOSEC LOOKUPS                              │' },
+          { type: 'info', text: '│    ip <address>          IP lookup            │' },
+          { type: 'info', text: '│    domain <domain>       Domain lookup        │' },
+          { type: 'info', text: '│    cve <id>              CVE lookup           │' },
+          { type: 'info', text: '│    hash <hash>           Hash lookup          │' },
+          { type: 'info', text: '│    http <code>           HTTP status info     │' },
+          { type: 'info', text: '│    encode <text>         Base64/URL encode    │' },
+          { type: 'info', text: '│    decode <text>         Base64/URL decode    │' },
+          { type: 'info', text: '│                                               │' },
+          { type: 'info', text: '│  PRODUCTIVITY                                 │' },
+          { type: 'info', text: '│    todo add <task>       Add todo item        │' },
+          { type: 'info', text: '│    todo list             List todos           │' },
+          { type: 'info', text: '│    todo done <id>        Complete todo        │' },
+          { type: 'info', text: '│    note add <text>       Append to notes      │' },
+          { type: 'info', text: '│    timer <minutes>       Start timer          │' },
+          { type: 'info', text: '│    recent                Recent navigations   │' },
+          { type: 'info', text: '│    freq                  Most used bookmarks  │' },
+          { type: 'info', text: '│                                               │' },
+          { type: 'info', text: '│  THEMES & CONFIG                              │' },
+          { type: 'info', text: '│    theme <name>          Switch theme         │' },
+          { type: 'info', text: '│    workspace <name>      Switch workspace     │' },
+          { type: 'info', text: '│    config                Open settings        │' },
+          { type: 'info', text: '│                                               │' },
+          { type: 'info', text: '│  UTILITIES                                    │' },
+          { type: 'info', text: '│    clear                 Clear terminal       │' },
+          { type: 'info', text: '│    history               Command history      │' },
+          { type: 'info', text: '│    !!                    Repeat last command  │' },
+          { type: 'info', text: '│    home                  Reset viewport       │' },
+          { type: 'info', text: '└───────────────────────────────────────────────┘' },
           { type: 'system', text: '' },
         ]);
         break;
+
+      // Smart search command
+      case 's':
+      case 'search': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: s <query>' },
+            { type: 'info', text: 'Searches bookmarks, aliases, then web.' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const query = args.join(' ').toLowerCase();
+          // Search bookmarks first
+          const bmMatch = bookmarks.find(b => 
+            b.name.toLowerCase().includes(query) || 
+            b.id.toLowerCase().includes(query) ||
+            b.tags.some(t => t.toLowerCase().includes(query))
+          );
+          if (bmMatch) {
+            addOutput([
+              { type: 'success', text: `Found bookmark: ${bmMatch.name}` },
+              { type: 'success', text: `Opening ${bmMatch.url}...` },
+              { type: 'system', text: '' },
+            ]);
+            recordUsage(bmMatch.id);
+            recordNavigation(bmMatch.url, bmMatch.name, 'search');
+            window.open(bmMatch.url, '_blank');
+          } else {
+            // Search aliases
+            const aliasMatch = aliases.find(a => 
+              a.alias.toLowerCase().includes(query) ||
+              a.description.toLowerCase().includes(query)
+            );
+            if (aliasMatch) {
+              const url = aliasMatch.url;
+              addOutput([
+                { type: 'success', text: `Found alias: ${aliasMatch.alias}` },
+                { type: 'success', text: `Opening ${url}...` },
+                { type: 'system', text: '' },
+              ]);
+              recordNavigation(url, aliasMatch.description, 'search');
+              window.open(url, '_blank');
+            } else {
+              // Fall back to default search engine
+              const searchUrl = settings.defaultSearchEngine === 'duckduckgo' 
+                ? `https://duckduckgo.com/?q=${encodeURIComponent(args.join(' '))}`
+                : `https://www.google.com/search?q=${encodeURIComponent(args.join(' '))}`;
+              addOutput([
+                { type: 'success', text: `Searching web for: "${args.join(' ')}"...` },
+                { type: 'system', text: '' },
+              ]);
+              recordNavigation(searchUrl, `Search: ${args.join(' ')}`, 'search');
+              window.open(searchUrl, '_blank');
+            }
+          }
+        }
+        break;
+      }
 
       case 'go':
         if (args.length === 0) {
@@ -332,11 +494,27 @@ function Terminal() {
 
       case 'note':
       case 'notes':
-        addOutput([
-          { type: 'success', text: 'Opening notes editor...' },
-          { type: 'system', text: '' },
-        ]);
-        navigate('/notes');
+        if (args.length > 0 && args[0] === 'add') {
+          const text = args.slice(1).join(' ');
+          if (text) {
+            setNotes(notes + '\n' + text);
+            addOutput([
+              { type: 'success', text: `Added to notes: "${text}"` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: 'Usage: note add <text>' },
+              { type: 'system', text: '' },
+            ]);
+          }
+        } else {
+          addOutput([
+            { type: 'success', text: 'Opening notes editor...' },
+            { type: 'system', text: '' },
+          ]);
+          navigate('/notes');
+        }
         break;
 
       case 'config':
@@ -351,7 +529,7 @@ function Terminal() {
       case 'clear':
       case 'cls':
         setOutput([
-          { type: 'system', text: 'ARGUS TERMINAL v2.0.0' },
+          { type: 'system', text: 'ARGUS TERMINAL v3.0.0' },
           { type: 'system', text: '' },
         ]);
         break;
@@ -365,7 +543,7 @@ function Terminal() {
         break;
 
       case 'time':
-      case 'date':
+      case 'date': {
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         const timeStr = settings.militaryTime 
@@ -377,6 +555,7 @@ function Terminal() {
           { type: 'system', text: '' },
         ]);
         break;
+      }
 
       case 'history':
         if (commandHistory.length === 0) {
@@ -415,14 +594,397 @@ function Terminal() {
 
       case 'version':
         addOutput([
-          { type: 'info', text: 'Argus Terminal v2.0.0' },
+          { type: 'info', text: 'Argus Terminal v3.0.0' },
           { type: 'info', text: 'Built with React + Vite + TailwindCSS' },
           { type: 'info', text: 'https://github.com/this-bytes/argus' },
           { type: 'system', text: '' },
         ]);
         break;
 
-      default:
+      // InfoSec Lookup Commands
+      case 'ip': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: ip <address>' },
+            { type: 'info', text: 'Opens IP in Shodan, VirusTotal, AbuseIPDB' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const ip = args[0];
+          const lookups = getIpLookupUrls(ip);
+          addOutput([
+            { type: 'success', text: `Opening IP lookups for ${ip}...` },
+            ...lookups.map(l => ({ type: 'info', text: `  → ${l.name}` })),
+            { type: 'system', text: '' },
+          ]);
+          lookups.forEach(l => window.open(l.url, '_blank'));
+        }
+        break;
+      }
+
+      case 'domain': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: domain <domain>' },
+            { type: 'info', text: 'Opens domain in SecurityTrails, crt.sh, VirusTotal' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const domain = args[0];
+          const lookups = getDomainLookupUrls(domain);
+          addOutput([
+            { type: 'success', text: `Opening domain lookups for ${domain}...` },
+            ...lookups.map(l => ({ type: 'info', text: `  → ${l.name}` })),
+            { type: 'system', text: '' },
+          ]);
+          lookups.forEach(l => window.open(l.url, '_blank'));
+        }
+        break;
+      }
+
+      case 'cve': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: cve <id>' },
+            { type: 'info', text: 'Example: cve CVE-2021-44228' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const cveId = args[0];
+          const lookups = getCveLookupUrls(cveId);
+          addOutput([
+            { type: 'success', text: `Opening CVE lookups for ${cveId.toUpperCase()}...` },
+            ...lookups.map(l => ({ type: 'info', text: `  → ${l.name}` })),
+            { type: 'system', text: '' },
+          ]);
+          lookups.forEach(l => window.open(l.url, '_blank'));
+        }
+        break;
+      }
+
+      case 'hash': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: hash <hash>' },
+            { type: 'info', text: 'Opens hash in VirusTotal, Hybrid Analysis' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const hash = args[0];
+          const lookups = getHashLookupUrls(hash);
+          addOutput([
+            { type: 'success', text: `Opening hash lookups for ${hash}...` },
+            ...lookups.map(l => ({ type: 'info', text: `  → ${l.name}` })),
+            { type: 'system', text: '' },
+          ]);
+          lookups.forEach(l => window.open(l.url, '_blank'));
+        }
+        break;
+      }
+
+      case 'http': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: http <code>' },
+            { type: 'info', text: 'Example: http 404' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const code = args[0];
+          const info = getHttpCode(code);
+          if (info) {
+            const category = getHttpCategory(code);
+            addOutput([
+              { type: 'info', text: `HTTP ${code} - ${info.status}` },
+              { type: 'info', text: `Category: ${category}` },
+              { type: 'info', text: `${info.description}` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: `Unknown HTTP status code: ${code}` },
+              { type: 'system', text: '' },
+            ]);
+          }
+        }
+        break;
+      }
+
+      case 'encode': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: encode <text>' },
+            { type: 'info', text: 'Encodes text to Base64 and URL encoding' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const text = args.join(' ');
+          const b64 = base64Encode(text);
+          const url = urlEncode(text);
+          addOutput([
+            { type: 'info', text: `Original: ${text}` },
+            { type: 'success', text: `Base64:   ${b64}` },
+            { type: 'success', text: `URL:      ${url}` },
+            { type: 'system', text: '' },
+          ]);
+        }
+        break;
+      }
+
+      case 'decode': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'error', text: 'Usage: decode <text>' },
+            { type: 'info', text: 'Attempts to decode Base64 and URL encoding' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const text = args.join(' ');
+          const b64Result = base64Decode(text);
+          const urlResult = urlDecode(text);
+          addOutput([
+            { type: 'info', text: `Input:    ${text}` },
+            { type: 'success', text: `Base64:   ${b64Result || '(invalid base64)'}` },
+            { type: 'success', text: `URL:      ${urlResult || '(invalid URL encoding)'}` },
+            { type: 'system', text: '' },
+          ]);
+        }
+        break;
+      }
+
+      // Todo commands
+      case 'todo': {
+        if (args.length === 0 || args[0] === 'list') {
+          if (todos.length === 0) {
+            addOutput([
+              { type: 'info', text: 'No todos. Use "todo add <task>" to create one.' },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'info', text: '╔═══════════════════════════════════════════╗' },
+              { type: 'info', text: '║                  TODOS                    ║' },
+              { type: 'info', text: '╠═══════════════════════════════════════════╣' },
+              ...todos.map((t, i) => ({
+                type: 'info',
+                text: `║  ${t.done ? '✓' : '○'} [${i + 1}] ${t.text.slice(0, 30)}${t.text.length > 30 ? '...' : ''}`,
+              })),
+              { type: 'info', text: '╚═══════════════════════════════════════════╝' },
+              { type: 'system', text: '' },
+            ]);
+          }
+        } else if (args[0] === 'add' && args.length > 1) {
+          const task = args.slice(1).join(' ');
+          addTodo(task);
+          addOutput([
+            { type: 'success', text: `Todo added: "${task}"` },
+            { type: 'system', text: '' },
+          ]);
+        } else if (args[0] === 'done' && args.length > 1) {
+          const index = parseInt(args[1], 10) - 1;
+          if (index >= 0 && index < todos.length) {
+            toggleTodo(todos[index].id);
+            addOutput([
+              { type: 'success', text: `Todo ${index + 1} marked as ${todos[index].done ? 'pending' : 'complete'}.` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: `Invalid todo number: ${args[1]}` },
+              { type: 'system', text: '' },
+            ]);
+          }
+        } else if (args[0] === 'rm' && args.length > 1) {
+          const index = parseInt(args[1], 10) - 1;
+          if (index >= 0 && index < todos.length) {
+            deleteTodo(todos[index].id);
+            addOutput([
+              { type: 'success', text: `Todo ${index + 1} removed.` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: `Invalid todo number: ${args[1]}` },
+              { type: 'system', text: '' },
+            ]);
+          }
+        } else {
+          addOutput([
+            { type: 'error', text: 'Usage: todo [add <task>|done <num>|rm <num>|list]' },
+            { type: 'system', text: '' },
+          ]);
+        }
+        break;
+      }
+
+      // Timer command
+      case 'timer': {
+        if (args.length === 0) {
+          if (timer) {
+            // Use getTimerRemaining from context to get remaining time
+            const remaining = timer.endTime > 0 ? Math.max(0, timer.endTime - new Date().getTime()) : 0;
+            if (remaining > 0) {
+              const mins = Math.floor(remaining / 60000);
+              const secs = Math.floor((remaining % 60000) / 1000);
+              addOutput([
+                { type: 'info', text: `Timer running: ${mins}m ${secs}s remaining` },
+                { type: 'info', text: 'Use "timer stop" to cancel.' },
+                { type: 'system', text: '' },
+              ]);
+            } else {
+              addOutput([
+                { type: 'success', text: '⏰ Timer complete!' },
+                { type: 'system', text: '' },
+              ]);
+              stopTimer();
+            }
+          } else {
+            addOutput([
+              { type: 'info', text: 'No timer running.' },
+              { type: 'info', text: 'Usage: timer <minutes> (e.g., timer 25)' },
+              { type: 'system', text: '' },
+            ]);
+          }
+        } else if (args[0] === 'stop') {
+          stopTimer();
+          addOutput([
+            { type: 'success', text: 'Timer stopped.' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const minutes = parseInt(args[0].replace('m', ''), 10);
+          if (isNaN(minutes) || minutes <= 0) {
+            addOutput([
+              { type: 'error', text: 'Invalid duration. Use: timer 25' },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            startTimer(minutes);
+            addOutput([
+              { type: 'success', text: `Timer started for ${minutes} minutes.` },
+              { type: 'system', text: '' },
+            ]);
+          }
+        }
+        break;
+      }
+
+      // Recent navigations
+      case 'recent': {
+        const recents = getRecentNavigations(10);
+        if (recents.length === 0) {
+          addOutput([
+            { type: 'info', text: 'No recent navigations.' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          addOutput([
+            { type: 'info', text: 'Recent navigations:' },
+            ...recents.map((r, i) => ({
+              type: 'info',
+              text: `  ${i + 1}. ${r.title || r.url}`,
+            })),
+            { type: 'system', text: '' },
+          ]);
+        }
+        break;
+      }
+
+      // Frequency/most used bookmarks
+      case 'freq': {
+        const topBookmarks = getMostUsedBookmarks(10);
+        if (topBookmarks.length === 0) {
+          addOutput([
+            { type: 'info', text: 'No usage data yet.' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          addOutput([
+            { type: 'info', text: 'Most used bookmarks:' },
+            ...topBookmarks.map((b, i) => ({
+              type: 'info',
+              text: `  ${i + 1}. ${b.icon} ${b.name}`,
+            })),
+            { type: 'system', text: '' },
+          ]);
+        }
+        break;
+      }
+
+      // Theme command
+      case 'theme': {
+        if (args.length === 0) {
+          const themeNames = Object.keys(THEMES);
+          addOutput([
+            { type: 'info', text: `Current theme: ${settings.theme}` },
+            { type: 'info', text: `Available themes: ${themeNames.join(', ')}` },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const themeName = args[0].toLowerCase();
+          if (THEMES[themeName]) {
+            updateSettings({ theme: themeName });
+            addOutput([
+              { type: 'success', text: `Theme changed to: ${THEMES[themeName].name}` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: `Unknown theme: ${themeName}` },
+              { type: 'info', text: `Available: ${Object.keys(THEMES).join(', ')}` },
+              { type: 'system', text: '' },
+            ]);
+          }
+        }
+        break;
+      }
+
+      // Workspace command
+      case 'workspace': {
+        if (args.length === 0) {
+          addOutput([
+            { type: 'info', text: `Active workspace: ${activeWorkspace || 'none'}` },
+            { type: 'info', text: 'Available: work, research, personal' },
+            { type: 'info', text: 'Use: workspace <name>' },
+            { type: 'system', text: '' },
+          ]);
+        } else {
+          const wsName = args[0].toLowerCase();
+          if (switchWorkspace(wsName)) {
+            addOutput([
+              { type: 'success', text: `Switched to workspace: ${wsName}` },
+              { type: 'system', text: '' },
+            ]);
+          } else {
+            addOutput([
+              { type: 'error', text: `Unknown workspace: ${wsName}` },
+              { type: 'info', text: 'Available: work, research, personal' },
+              { type: 'system', text: '' },
+            ]);
+          }
+        }
+        break;
+      }
+
+      // Bang syntax help
+      case 'bangs': {
+        addOutput([
+          { type: 'info', text: '╔═══════════════════════════════════════════╗' },
+          { type: 'info', text: '║           BANG SYNTAX SHORTCUTS           ║' },
+          { type: 'info', text: '╠═══════════════════════════════════════════╣' },
+          ...Object.entries(BANG_ENGINES).map(([bang, engine]) => ({
+            type: 'info',
+            text: `║  ${bang.padEnd(8)} → ${engine.name}`,
+          })),
+          { type: 'info', text: '╚═══════════════════════════════════════════╝' },
+          { type: 'system', text: '' },
+          { type: 'info', text: 'Usage: !g how to code' },
+          { type: 'system', text: '' },
+        ]);
+        break;
+      }
+
+      default: {
         // Check if it's a bookmark ID for quick open
         const matchedBookmark = bookmarks.find((b) => b.id === command);
         if (matchedBookmark) {
@@ -438,6 +1000,7 @@ function Terminal() {
             { type: 'system', text: '' },
           ]);
         }
+      }
     }
   };
 
@@ -468,8 +1031,13 @@ function Terminal() {
       }
     } else if (e.key === 'Tab') {
       e.preventDefault();
-      // Simple tab completion for commands
-      const commands = ['help', 'go', 'open', 'bm', 'alias', 'feeds', 'scripts', 'note', 'config', 'clear', 'history', 'home', 'time', 'whoami', 'version'];
+      // Tab completion for commands
+      const commands = [
+        'help', 'go', 'open', 'bm', 'alias', 'feeds', 'scripts', 'note', 'config', 
+        'clear', 'history', 'home', 'time', 'whoami', 'version', 's', 'search',
+        'ip', 'domain', 'cve', 'hash', 'http', 'encode', 'decode',
+        'todo', 'timer', 'recent', 'freq', 'theme', 'workspace', 'bangs'
+      ];
       const aliasNames = aliases.map(a => a.alias);
       const bookmarkIds = bookmarks.map(b => b.id);
       const allCompletions = [...commands, ...aliasNames, ...bookmarkIds];
@@ -485,9 +1053,16 @@ function Terminal() {
     } else if (e.key === 'l' && e.ctrlKey) {
       e.preventDefault();
       setOutput([
-        { type: 'system', text: 'ARGUS TERMINAL v2.0.0' },
+        { type: 'system', text: 'ARGUS TERMINAL v3.0.0' },
         { type: 'system', text: '' },
       ]);
+    } else if (e.key === 'Escape') {
+      // Clear input and return to welcome
+      setInput('');
+      showWelcome();
+    } else if (e.key === '/' && !input) {
+      // Vim-style focus (already focused, so this just confirms)
+      e.preventDefault();
     }
   };
 
@@ -545,6 +1120,7 @@ function Terminal() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           className="terminal-input flex-1 text-sm text-green-400 placeholder-green-700 bg-transparent border-none outline-none"
+          style={{ color: '#4ade80', caretColor: '#4ade80' }}
           placeholder="Enter command..."
           autoComplete="off"
           autoCorrect="off"

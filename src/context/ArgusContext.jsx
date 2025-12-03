@@ -10,6 +10,12 @@ const STORAGE_KEYS = {
   NOTES: 'argus_notes',
   HISTORY: 'argus_history',
   SETTINGS: 'argus_settings',
+  USAGE_STATS: 'argus_usage_stats',
+  TODOS: 'argus_todos',
+  RECENT_NAVIGATIONS: 'argus_recent',
+  ACTIVE_WORKSPACE: 'argus_workspace',
+  WORKSPACES: 'argus_workspaces',
+  TIMER: 'argus_timer',
 };
 
 // Default bookmarks for InfoSec productivity
@@ -76,12 +82,32 @@ const DEFAULT_NOTES = `# Argus Notes
 `;
 
 const DEFAULT_SETTINGS = {
-  theme: 'green', // green, amber, blue
+  theme: 'green', // green, amber, blue, red, purple
   showClock: true,
   militaryTime: true,
   showDate: true,
   terminalPrompt: '>',
   maxHistory: 100,
+  defaultSearchEngine: 'google', // google, duckduckgo, bing
+};
+
+// Default workspaces
+const DEFAULT_WORKSPACES = {
+  work: {
+    name: 'Work',
+    bookmarkIds: ['github', 'hackerone'],
+    aliasFilter: [],
+  },
+  research: {
+    name: 'Research',
+    bookmarkIds: ['shodan', 'cve', 'virustotal'],
+    aliasFilter: [],
+  },
+  personal: {
+    name: 'Personal',
+    bookmarkIds: [],
+    aliasFilter: [],
+  },
 };
 
 export function ArgusProvider({ children }) {
@@ -155,6 +181,66 @@ export function ArgusProvider({ children }) {
     }
   });
 
+  // Usage stats for tracking bookmark frequency
+  const [usageStats, setUsageStats] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.USAGE_STATS);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Todos state
+  const [todos, setTodos] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TODOS);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Recent navigations (last 100)
+  const [recentNavigations, setRecentNavigations] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.RECENT_NAVIGATIONS);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Active workspace
+  const [activeWorkspace, setActiveWorkspace] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORKSPACE);
+      return stored || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Workspaces configuration
+  const [workspaces, setWorkspaces] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.WORKSPACES);
+      return stored ? JSON.parse(stored) : DEFAULT_WORKSPACES;
+    } catch {
+      return DEFAULT_WORKSPACES;
+    }
+  });
+
+  // Timer state
+  const [timer, setTimer] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TIMER);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Current viewport content
   const [viewport, setViewport] = useState({ type: 'welcome', data: null });
 
@@ -186,6 +272,36 @@ export function ArgusProvider({ children }) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); } catch (e) { console.error('Failed to save settings:', e); }
   }, [settings]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.USAGE_STATS, JSON.stringify(usageStats)); } catch (e) { console.error('Failed to save usage stats:', e); }
+  }, [usageStats]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.TODOS, JSON.stringify(todos)); } catch (e) { console.error('Failed to save todos:', e); }
+  }, [todos]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.RECENT_NAVIGATIONS, JSON.stringify(recentNavigations.slice(-100))); } catch (e) { console.error('Failed to save recent navigations:', e); }
+  }, [recentNavigations]);
+
+  useEffect(() => {
+    if (activeWorkspace) {
+      try { localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSPACE, activeWorkspace); } catch (e) { console.error('Failed to save active workspace:', e); }
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.WORKSPACES, JSON.stringify(workspaces)); } catch (e) { console.error('Failed to save workspaces:', e); }
+  }, [workspaces]);
+
+  useEffect(() => {
+    if (timer) {
+      try { localStorage.setItem(STORAGE_KEYS.TIMER, JSON.stringify(timer)); } catch (e) { console.error('Failed to save timer:', e); }
+    } else {
+      try { localStorage.removeItem(STORAGE_KEYS.TIMER); } catch (e) { console.error('Failed to remove timer:', e); }
+    }
+  }, [timer]);
 
   // Bookmark operations
   const addBookmark = useCallback((bookmark) => {
@@ -314,7 +430,105 @@ export function ArgusProvider({ children }) {
     if (config.scripts) setScripts(config.scripts);
     if (config.notes) setNotes(config.notes);
     if (config.settings) setSettings((prev) => ({ ...prev, ...config.settings }));
+    if (config.todos) setTodos(config.todos);
+    if (config.workspaces) setWorkspaces(config.workspaces);
   }, []);
+
+  // Usage tracking operations
+  const recordUsage = useCallback((bookmarkId) => {
+    setUsageStats((prev) => ({
+      ...prev,
+      [bookmarkId]: (prev[bookmarkId] || 0) + 1,
+    }));
+  }, []);
+
+  const getMostUsedBookmarks = useCallback((limit = 9) => {
+    return [...bookmarks]
+      .sort((a, b) => (usageStats[b.id] || 0) - (usageStats[a.id] || 0))
+      .slice(0, limit);
+  }, [bookmarks, usageStats]);
+
+  // Todo operations
+  const addTodo = useCallback((text) => {
+    const newTodo = {
+      id: Date.now().toString(),
+      text,
+      done: false,
+      createdAt: Date.now(),
+    };
+    setTodos((prev) => [...prev, newTodo]);
+    return newTodo;
+  }, []);
+
+  const toggleTodo = useCallback((id) => {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
+    );
+  }, []);
+
+  const deleteTodo = useCallback((id) => {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const getActiveTodoCount = useCallback(() => {
+    return todos.filter((t) => !t.done).length;
+  }, [todos]);
+
+  // Recent navigation operations
+  const recordNavigation = useCallback((url, title, source) => {
+    const entry = {
+      url,
+      title,
+      source,
+      timestamp: Date.now(),
+    };
+    setRecentNavigations((prev) => [entry, ...prev.slice(0, 99)]);
+  }, []);
+
+  const getRecentNavigations = useCallback((limit = 10) => {
+    return recentNavigations.slice(0, limit);
+  }, [recentNavigations]);
+
+  // Workspace operations
+  const switchWorkspace = useCallback((workspaceName) => {
+    if (workspaces[workspaceName]) {
+      setActiveWorkspace(workspaceName);
+      return true;
+    }
+    return false;
+  }, [workspaces]);
+
+  const getWorkspaceBookmarks = useCallback(() => {
+    if (!activeWorkspace || !workspaces[activeWorkspace]) {
+      return bookmarks;
+    }
+    const ws = workspaces[activeWorkspace];
+    if (!ws.bookmarkIds || ws.bookmarkIds.length === 0) {
+      return bookmarks;
+    }
+    return bookmarks.filter((b) => ws.bookmarkIds.includes(b.id));
+  }, [activeWorkspace, workspaces, bookmarks]);
+
+  // Timer operations
+  const startTimer = useCallback((durationMinutes, type = 'timer') => {
+    const endTime = Date.now() + durationMinutes * 60 * 1000;
+    setTimer({
+      type,
+      endTime,
+      duration: durationMinutes,
+      startedAt: Date.now(),
+    });
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    setTimer(null);
+  }, []);
+
+  const getTimerRemaining = useCallback(() => {
+    if (!timer) return null;
+    const remaining = timer.endTime - Date.now();
+    return remaining > 0 ? remaining : 0;
+  }, [timer]);
 
   const value = {
     // Bookmarks
@@ -364,6 +578,35 @@ export function ArgusProvider({ children }) {
     // Config
     exportConfig,
     importConfig,
+
+    // Usage tracking
+    usageStats,
+    recordUsage,
+    getMostUsedBookmarks,
+
+    // Todos
+    todos,
+    addTodo,
+    toggleTodo,
+    deleteTodo,
+    getActiveTodoCount,
+
+    // Recent navigations
+    recentNavigations,
+    recordNavigation,
+    getRecentNavigations,
+
+    // Workspaces
+    activeWorkspace,
+    workspaces,
+    switchWorkspace,
+    getWorkspaceBookmarks,
+
+    // Timer
+    timer,
+    startTimer,
+    stopTimer,
+    getTimerRemaining,
   };
 
   return (

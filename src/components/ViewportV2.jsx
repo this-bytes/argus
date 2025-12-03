@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useArgus } from '../context/useArgus';
+import QuickLauncher from './QuickLauncher';
 
 function Viewport() {
   const { viewport, bookmarks, feeds } = useArgus();
@@ -149,8 +151,11 @@ function FeedCard({ feed }) {
 }
 
 function WelcomeCard() {
+  const { getActiveTodoCount, timer } = useArgus();
+  const todoCount = getActiveTodoCount ? getActiveTodoCount() : 0;
+  
   return (
-    <div className="text-center max-w-lg">
+    <div className="text-center max-w-2xl w-full">
       <div className="mb-6">
         <pre className="text-green-500 text-xs leading-tight text-glow inline-block text-left">
 {`
@@ -164,27 +169,70 @@ function WelcomeCard() {
       </div>
 
       <h2 className="text-xl text-green-500 mb-2 font-bold">
-        WELCOME TO ARGUS
+        ARGUS v3.0
       </h2>
-      <p className="text-green-500/50 text-sm mb-6">
+      <p className="text-green-500/50 text-sm mb-4">
         Your InfoSec Browser Command Center
       </p>
 
-      <div className="grid grid-cols-2 gap-3 text-left mb-6">
-        <QuickCommand cmd="bm" desc="View bookmarks" />
-        <QuickCommand cmd="alias" desc="List aliases" />
-        <QuickCommand cmd="go gh" desc="Open GitHub" />
-        <QuickCommand cmd="feeds" desc="RSS feeds" />
-        <QuickCommand cmd="note" desc="Quick notes" />
-        <QuickCommand cmd="config" desc="Settings" />
+      {/* Status badges */}
+      <div className="flex justify-center gap-4 mb-6">
+        {todoCount > 0 && (
+          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">
+            📋 {todoCount} todos
+          </span>
+        )}
+        {timer && (
+          <TimerBadge timer={timer} />
+        )}
+      </div>
+
+      {/* Quick Launcher */}
+      <div className="mb-6">
+        <QuickLauncher />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-left mb-6">
+        <QuickCommand cmd="s <query>" desc="Smart search" />
+        <QuickCommand cmd="!g <query>" desc="Google search" />
+        <QuickCommand cmd="ip <addr>" desc="IP lookup" />
+        <QuickCommand cmd="todo add" desc="Add todo" />
+        <QuickCommand cmd="theme" desc="Change theme" />
+        <QuickCommand cmd="help" desc="All commands" />
       </div>
 
       <div className="text-green-500/40 text-xs space-y-1">
-        <p>Type <span className="text-green-400">help</span> for all commands</p>
-        <p>Press <span className="text-green-400">Tab</span> for autocomplete</p>
-        <p>Press <span className="text-green-400">↑/↓</span> for history</p>
+        <p>Type <span className="text-green-400">help</span> for all commands • <span className="text-green-400">bangs</span> for search shortcuts</p>
+        <p>Press <span className="text-green-400">Tab</span> for autocomplete • <span className="text-green-400">↑/↓</span> for history</p>
+        <p>Press <span className="text-green-400">Esc</span> to clear • <span className="text-green-400">!!</span> to repeat last command</p>
       </div>
     </div>
+  );
+}
+
+function TimerBadge({ timer }) {
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    const updateRemaining = () => {
+      const rem = timer.endTime - Date.now();
+      setRemaining(rem > 0 ? rem : 0);
+    };
+    
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  if (remaining <= 0) return null;
+
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+
+  return (
+    <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded animate-pulse">
+      ⏱️ {mins}:{secs.toString().padStart(2, '0')}
+    </span>
   );
 }
 
